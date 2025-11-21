@@ -1,49 +1,46 @@
-// server.js
 const express = require("express");
 const axios = require("axios");
+const path = require("path");
+const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const IPINFO_TOKEN = process.env.IPINFO_TOKEN;
 
-app.use(express.static("public"));
+app.use(cors());
+app.use(express.static(path.join(__dirname, "public")));
 
+// IP 查询 API
 app.get("/api/ip", async (req, res) => {
   try {
-    let ip =
-      req.headers["x-forwarded-for"]?.split(",")[0] ||
-      req.connection.remoteAddress ||
-      req.socket.remoteAddress ||
-      req.ip;
+    // 如果前端没有传 ip，就使用访问者的真实 IP
+    let ip = req.query.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-    // 本地访问时模拟一个公网 IP
-    if (ip === "::1" || ip === "127.0.0.1") {
-      ip = "8.8.8.8"; // 模拟公网 IP
-    }
-
-    console.log("客户端 IP:", ip);
-
-    // 请求 ipinfo 获取 IP 信息
-    const response = await axios.get(
-      `https://ipinfo.io/${ip}/json?token=${IPINFO_TOKEN}`
-    );
-
+    // IPv6 前缀处理
+    if (ip.startsWith("::ffff:")) ip = ip.split("::ffff:")[1];
+    
+    const response = await axios.get(`https://ipinfo.io/${ip}?token=${process.env.IPINFO_TOKEN}`);
     res.json(response.data);
   } catch (err) {
-    console.error("获取 IP 信息失败:", err);
+    console.error(err);
+    // 查询失败时返回示例 IP
     res.json({
       ip: "8.8.8.8",
       city: "Mountain View",
       region: "California",
       country: "US",
       loc: "37.4056,-122.0775",
-      org: "Google LLC",
+      org: "AS15169 Google LLC",
       postal: "94043",
+      timezone: "America/Los_Angeles"
     });
   }
 });
 
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 app.listen(PORT, () => {
-  console.log(`服务器运行于 http://localhost:${PORT}`);
+  console.log(`✅ Server running at http://localhost:${PORT}`);
 });
